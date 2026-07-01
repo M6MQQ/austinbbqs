@@ -44,8 +44,13 @@ body {
   }
 }
 
-/* Leaflet renders dark map tiles better with a subtle border */
+/* Light basemap: use a pale placeholder while tiles load, and keep
+   Leaflet's popup/control text dark for readability on light tiles. */
 .leaflet-container {
   @apply rounded-xl;
-  background: #1a1512;
+  background: #e9e5dc;
+}
+.leaflet-popup-content-wrapper,
+.leaflet-popup-tip {
+  color: #2b241f;
 }
