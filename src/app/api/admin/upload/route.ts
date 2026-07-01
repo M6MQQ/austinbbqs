@@ -33,7 +33,9 @@ export async function POST(req: NextRequest) {
     const caption = (form.get("caption") as string) ?? "";
 
     stage = "validate";
-    if (!(file instanceof File)) {
+    // Don't use `instanceof File` — the File global is absent on Node < 20.
+    // A FormData value is either a string or a File/Blob-like object.
+    if (!file || typeof file === "string") {
       return NextResponse.json({ error: "Missing file" }, { status: 400 });
     }
     if (typeof restaurantId !== "string" || !restaurantId) {
