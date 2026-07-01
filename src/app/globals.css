@@ -1,0 +1,51 @@
+@import url("https://fonts.googleapis.com/css2?family=Rye&family=Inter:wght@400;500;600;700;800&display=swap");
+@import "leaflet/dist/leaflet.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  @apply bg-smoke text-cream font-body antialiased;
+  background-image:
+    radial-gradient(circle at 20% -10%, rgba(232, 114, 42, 0.12), transparent 40%),
+    radial-gradient(circle at 90% 0%, rgba(193, 68, 14, 0.1), transparent 35%);
+  background-attachment: fixed;
+}
+
+@layer components {
+  .container-abq {
+    @apply mx-auto w-full max-w-6xl px-4 sm:px-6;
+  }
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-flame/60;
+  }
+  .btn-primary {
+    @apply btn bg-ember text-cream hover:bg-flame;
+  }
+  .btn-ghost {
+    @apply btn border border-bark/70 bg-char/60 text-cream hover:border-flame/60;
+  }
+  .card {
+    @apply rounded-xl border border-bark/60 bg-char/70 shadow-lg shadow-black/30;
+  }
+  .input {
+    @apply w-full rounded-md border border-bark/70 bg-smoke/80 px-3 py-2 text-cream placeholder:text-cream/40 focus:border-flame/60 focus:outline-none focus:ring-1 focus:ring-flame/50;
+  }
+  .label {
+    @apply mb-1 block text-sm font-medium text-cream/80;
+  }
+  .tag {
+    @apply inline-block rounded-full border border-flame/40 bg-ember/15 px-2.5 py-0.5 text-xs font-medium text-flame;
+  }
+}
+
+/* Leaflet renders dark map tiles better with a subtle border */
+.leaflet-container {
+  @apply rounded-xl;
+  background: #1a1512;
+}

@@ -1,0 +1,87 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum RestaurantStatus {
+  DRAFT
+  PUBLISHED
+}
+
+enum PriceRange {
+  ONE   // $
+  TWO   // $$
+  THREE // $$$
+  FOUR  // $$$$
+}
+
+model Restaurant {
+  id           String           @id @default(cuid())
+  slug         String           @unique
+  name         String
+  description  String           @default("")
+  address      String           @default("")
+  neighborhood String           @default("")
+  city         String           @default("Austin")
+  lat          Float?
+  lng          Float?
+  phone        String?
+  website      String?
+  priceRange   PriceRange?
+  hours        Json? // { mon: { open: "11:00", close: "20:00" } | null, ... }
+  specialties  String[] // brisket, ribs, sausage, ...
+  amenities    String[] // patio, byob, dog-friendly, ...
+  status       RestaurantStatus @default(DRAFT)
+  featured     Boolean          @default(false)
+  sourceUrls   String[] // citations gathered by the AI research chat
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  images  RestaurantImage[]
+  reviews Review[]
+
+  @@index([status])
+  @@index([featured])
+}
+
+model RestaurantImage {
+  id           String     @id @default(cuid())
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  restaurantId String
+  path         String // relative path within UPLOAD_DIR, served via /api/images
+  caption      String     @default("")
+  isPrimary    Boolean    @default(false)
+  sortOrder    Int        @default(0)
+  createdAt    DateTime   @default(now())
+
+  @@index([restaurantId])
+}
+
+model Review {
+  id           String     @id @default(cuid())
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  restaurantId String
+  authorName   String     @default("Anonymous")
+  rating       Int // 1-5
+  body         String     @default("")
+  flagged      Boolean    @default(false)
+  flagCount    Int        @default(0)
+  hidden       Boolean    @default(false) // admin can hide after moderation
+  createdAt    DateTime   @default(now())
+
+  @@index([restaurantId])
+  @@index([flagged])
+}
+
+model ChatMessage {
+  id        String   @id @default(cuid())
+  role      String // "user" | "assistant"
+  content   Json
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}
