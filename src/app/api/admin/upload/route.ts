@@ -24,42 +24,45 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const form = await req.formData().catch(() => null);
-  if (!form) {
-    return NextResponse.json({ error: "Expected multipart form" }, { status: 400 });
-  }
-  const file = form.get("file");
-  const restaurantId = form.get("restaurantId");
-  const caption = (form.get("caption") as string) ?? "";
-
-  if (!(file instanceof File)) {
-    return NextResponse.json({ error: "Missing file" }, { status: 400 });
-  }
-  if (typeof restaurantId !== "string" || !restaurantId) {
-    return NextResponse.json({ error: "Missing restaurantId" }, { status: 400 });
-  }
-  if (!extensionForMime(file.type)) {
-    return NextResponse.json(
-      { error: `Unsupported type: ${file.type}` },
-      { status: 400 },
-    );
-  }
-  if (file.size > MAX_BYTES) {
-    return NextResponse.json({ error: "File too large (max 12MB)" }, { status: 400 });
-  }
-
-  const restaurant = await prisma.restaurant.findUnique({
-    where: { id: restaurantId },
-    include: { images: true },
-  });
-  if (!restaurant) {
-    return NextResponse.json({ error: "Restaurant not found" }, { status: 404 });
-  }
-
+  // Track progress so any failure reports exactly which step threw.
+  let stage = "parse_form";
   try {
+    const form = await req.formData();
+    const file = form.get("file");
+    const restaurantId = form.get("restaurantId");
+    const caption = (form.get("caption") as string) ?? "";
+
+    stage = "validate";
+    if (!(file instanceof File)) {
+      return NextResponse.json({ error: "Missing file" }, { status: 400 });
+    }
+    if (typeof restaurantId !== "string" || !restaurantId) {
+      return NextResponse.json({ error: "Missing restaurantId" }, { status: 400 });
+    }
+    if (!extensionForMime(file.type)) {
+      return NextResponse.json(
+        { error: `Unsupported type: ${file.type}` },
+        { status: 400 },
+      );
+    }
+    if (file.size > MAX_BYTES) {
+      return NextResponse.json({ error: "File too large (max 12MB)" }, { status: 400 });
+    }
+
+    stage = "db_lookup";
+    const restaurant = await prisma.restaurant.findUnique({
+      where: { id: restaurantId },
+      include: { images: true },
+    });
+    if (!restaurant) {
+      return NextResponse.json({ error: "Restaurant not found" }, { status: 404 });
+    }
+
+    stage = "write_file";
     const buffer = Buffer.from(await file.arrayBuffer());
     const { relPath } = await saveImage(buffer, file.type);
 
+    stage = "db_create";
     const isFirst = restaurant.images.length === 0;
     const image = await prisma.restaurantImage.create({
       data: {
@@ -73,21 +76,27 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ image }, { status: 201 });
   } catch (err) {
-    // Surface the real cause so misconfigured storage is diagnosable.
+    // Surface the real cause + failing stage so misconfig is diagnosable.
     const e = err as NodeJS.ErrnoException;
     const dir = uploadDir();
-    console.error("Image upload failed", { dir, code: e.code, message: e.message });
+    console.error("Image upload failed", {
+      stage,
+      dir,
+      code: e.code,
+      message: e.message,
+    });
 
     let hint = "";
     if (e.code === "EACCES" || e.code === "EROFS") {
       hint = ` The app cannot write to "${dir}". On Railway, attach a Volume mounted at the parent of this path (e.g. mount "/data" when UPLOAD_DIR=/data/uploads) and redeploy.`;
-    } else if (e.code === "ENOENT") {
-      hint = ` The directory "${dir}" does not exist and could not be created. On Railway, make sure a Volume is mounted at the parent path (e.g. "/data") and UPLOAD_DIR points inside it.`;
+    } else if (e.code === "ENOENT" && stage === "write_file") {
+      hint = ` The directory "${dir}" does not exist and could not be created.`;
     }
 
     return NextResponse.json(
       {
-        error: `Upload failed: ${e.message}${hint}`,
+        error: `Upload failed at "${stage}": ${e.message}${hint}`,
+        stage,
         code: e.code ?? null,
         dir,
       },

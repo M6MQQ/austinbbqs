@@ -33,8 +33,16 @@ export function ImageManager({
       fd.append("restaurantId", restaurantId);
       const res = await fetch("/api/admin/upload", { method: "POST", body: fd });
       if (!res.ok) {
-        const d = await res.json().catch(() => ({}));
-        setError(d.error || "Upload failed");
+        const raw = await res.text();
+        let d: { error?: string } = {};
+        try {
+          d = JSON.parse(raw);
+        } catch {
+          /* non-JSON error body */
+        }
+        // Log the full response so it's copyable from the browser console.
+        console.error("Image upload failed", res.status, d.error || raw);
+        setError(d.error || `Upload failed (HTTP ${res.status})`);
         break;
       }
     }
@@ -75,7 +83,11 @@ export function ImageManager({
           />
         </label>
       </div>
-      {error && <p className="mt-2 text-sm text-red-400">{error}</p>}
+      {error && (
+        <p className="mt-2 whitespace-pre-wrap rounded-md border border-red-800 bg-red-950/40 px-3 py-2 text-sm text-red-300">
+          {error}
+        </p>
+      )}
 
       {images.length === 0 ? (
         <p className="mt-3 text-sm text-cream/50">No photos yet.</p>
