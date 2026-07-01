@@ -19,10 +19,7 @@ export default async function HomePage() {
     <div>
       <section className="relative overflow-hidden border-b border-bark/50">
         <div className="container-abq py-20 sm:py-28 text-center">
-          <p className="font-display text-flame/80 tracking-widest uppercase text-sm">
-            Central Texas · Post Oak · Low &amp; Slow
-          </p>
-          <h1 className="mt-3 font-display text-5xl sm:text-7xl leading-none text-cream">
+          <h1 className="font-display text-5xl sm:text-7xl leading-none text-cream">
             The Best <span className="text-flame">Barbecue</span>
             <br /> in Austin, Texas
           </h1>
