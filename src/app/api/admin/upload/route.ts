@@ -1,10 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
+import { promises as fs } from "fs";
+import path from "path";
 import { prisma } from "@/lib/db";
-import { saveImage, extensionForMime } from "@/lib/storage";
+import { saveImage, extensionForMime, uploadDir } from "@/lib/storage";
 
 export const runtime = "nodejs";
 
 const MAX_BYTES = 12 * 1024 * 1024; // 12 MB
+
+// Diagnostic: confirm the upload directory resolves and is writable.
+export async function GET() {
+  const dir = uploadDir();
+  try {
+    await fs.mkdir(dir, { recursive: true });
+    const probe = path.join(dir, ".write-test");
+    await fs.writeFile(probe, "ok");
+    await fs.rm(probe, { force: true });
+    return NextResponse.json({ dir, writable: true });
+  } catch (err) {
+    const e = err as NodeJS.ErrnoException;
+    return NextResponse.json({ dir, writable: false, code: e.code ?? null, error: e.message });
+  }
+}
 
 export async function POST(req: NextRequest) {
   const form = await req.formData().catch(() => null);
@@ -39,19 +56,42 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Restaurant not found" }, { status: 404 });
   }
 
-  const buffer = Buffer.from(await file.arrayBuffer());
-  const { relPath } = await saveImage(buffer, file.type);
+  try {
+    const buffer = Buffer.from(await file.arrayBuffer());
+    const { relPath } = await saveImage(buffer, file.type);
 
-  const isFirst = restaurant.images.length === 0;
-  const image = await prisma.restaurantImage.create({
-    data: {
-      restaurantId,
-      path: relPath,
-      caption,
-      isPrimary: isFirst,
-      sortOrder: restaurant.images.length,
-    },
-  });
+    const isFirst = restaurant.images.length === 0;
+    const image = await prisma.restaurantImage.create({
+      data: {
+        restaurantId,
+        path: relPath,
+        caption,
+        isPrimary: isFirst,
+        sortOrder: restaurant.images.length,
+      },
+    });
 
-  return NextResponse.json({ image }, { status: 201 });
+    return NextResponse.json({ image }, { status: 201 });
+  } catch (err) {
+    // Surface the real cause so misconfigured storage is diagnosable.
+    const e = err as NodeJS.ErrnoException;
+    const dir = uploadDir();
+    console.error("Image upload failed", { dir, code: e.code, message: e.message });
+
+    let hint = "";
+    if (e.code === "EACCES" || e.code === "EROFS") {
+      hint = ` The app cannot write to "${dir}". On Railway, attach a Volume mounted at the parent of this path (e.g. mount "/data" when UPLOAD_DIR=/data/uploads) and redeploy.`;
+    } else if (e.code === "ENOENT") {
+      hint = ` The directory "${dir}" does not exist and could not be created. On Railway, make sure a Volume is mounted at the parent path (e.g. "/data") and UPLOAD_DIR points inside it.`;
+    }
+
+    return NextResponse.json(
+      {
+        error: `Upload failed: ${e.message}${hint}`,
+        code: e.code ?? null,
+        dir,
+      },
+      { status: 500 },
+    );
+  }
 }
